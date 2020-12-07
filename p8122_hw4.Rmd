@@ -1,0 +1,129 @@
+---
+title: "Causal inference HW 4"
+author: "Adeline Shin"
+date: "12/2/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(raster)
+library(psych)
+library(MatchIt)
+library(optmatch)
+library(RItools)
+library(Matching)
+library(rgenoud)
+library(texreg)
+library(tableone)
+library(personalized)
+library("MatchIt")
+library("lmtest")
+library("sandwich")
+library("boot")
+library("survival")
+library("survey")
+```
+
+# Upload the Data
+```{r}
+gardasil_df = read.delim("./gardasil.dat.txt", sep = "") %>% 
+    janitor::clean_names()
+```
+
+# Question 1
+```{r}
+# Create subset of data without outcome variable
+gardasil_subset = gardasil_df[c(-5)] 
+
+describeBy(gardasil_subset, gardasil_subset$practice_type)
+```
+
+# Question 2
+The question of interest being addressed in this RCT is whether type of practice where Gardasil vaccine is taken affects rates of completion.
+
+## i) Treatment and Control Arm
+In this study, the treatment arm would consist of those who go to an OB-GYN office to receive their gardasil shots, while the control arm would consist of those who go to a practice to receiver their gardasil shots. Those in the control arm include those under the age of 18 who go to their pediatrician for their gardasil vaccine, as well as adults who visit their general practitioner for the gardasil vaccine.
+
+## ii) Eligibility Criteria
+```{r}
+tableone::CreateTableOne(vars = c("age", "age_group", "race", "shots", "insurance_type", "med_assist", "location", "location_type", "practice_type"), strata = "location", data = gardasil_subset)
+```
+
+Looking at the descriptive statistics by location, locations 2 and 3 seem to be OB-GYN offices, since they only practice types that correspond to OB-GYN. Furthermore, location 4 does not have any subjects who visit a family practice. Therefore, only location 1 will be included since it is the only one with all three types of practices. This enforces the probabilistic assumption, since it ensures that all subjects have the chance of being a part of either the treatment arm or the control arm.
+
+# Question 3
+```{r}
+# Only including those who are in location 1
+gardasil_included = subset(gardasil_subset, location == 1)
+
+# Creating a group for both general practice and pediatrician offices
+gardasil_included = gardasil_included %>% 
+    mutate(practice_type = recode(gardasil_included$practice_type, `0` = 0, `1` = 0, `2` = 1))
+
+# New descriptive statistics
+describeBy(gardasil_included, gardasil_included$practice_type)
+```
+
+Comparing the descriptive statistics created here with those from Question 1, the entirety of group 0 has been left out, since those are the subjects who visited a pediatrics practice for their gardasil vaccine. In addition, there are less subjects in both the OB-GYN and pediatrics groups, since everyone under the age of 18 has been excluded. Therefore, the mean age is a bit higher in both remaining groups. It also looks like the mean number of shots received went down slightly in both groups after excluding those ineligible for the study.
+
+# Question 4
+```{r}
+# Recode practice_type so that 0 = general practice and 1 = OB-GYN office
+ps.model = glm(practice_type ~ age + race + shots + insurance_type + med_assist, data = gardasil_included, family = binomial)
+
+ps = predict(ps.model, type = "response")
+
+summary(ps.model)
+```
+
+Interpretation
+
+# Question 5
+```{r}
+# Nearest neighbor matching with greedy matching
+psmatch1 = matchit(practice_type ~ age + race + shots + insurance_type + med_assist, data = gardasil_included, distance = "logit", method = "nearest", discard = "control")
+
+summary(psmatch1, standardize = TRUE)
+plot(psmatch1)
+plot(psmatch1, type="hist")
+par(mfrow = c(1, 1))
+plot(psmatch1, type="jitter", interactive=FALSE)
+
+# Nearest neighbor matching with optimal matching instead of greedy
+psmatch2 = matchit(practice_type ~ age + race + shots + insurance_type + med_assist, data = gardasil_included + I(age^2), distance = "logit", method = "optimal")
+
+summary(psmatch2, standardize = TRUE)
+plot(psmatch2)
+plot(psmatch2, type="hist")
+par(mfrow = c(1, 1))
+plot(psmatch2, type="jitter", interactive=FALSE)
+```
+
+The process for matching involved getting rid of the variables location and location type, since they were the same for all subjects after limiting the eligibility to only those in location 1. Both greedy and optimal methods for matching provide full matching of the treated units, but optimal matching gives better percent balance improvement overall for every variable.
+
+# Question 6
+```{r}
+# Create matched data for analysis
+psmatch2.data = match.data(psmatch2)
+
+# Calculate average treatment effect
+psmatch2.mod = svyglm(practice_type ~ age + race + shots + insurance_type + med_assist + I(age^2), data = gardasil_included, design = svydesign(~ 1, weights = ~ weights,data = psmatch2.data))
+summary(psmatch2.mod)
+
+psmatch_ate = matchit(practice_type ~ age + race + shots + insurance_type + med_assist + I(age^2), data = gardasil_included, distance = "logit", estimade = "ATT")
+psmatchate.data = match.data(psmatch_ate)
+psmatchate.mod = svyglm(practice_type ~ age + race + shots + insurance_type + med_assist + I(age^2), design = svydesign(~ 1, weights = ~ weights,data = psmatchate.data))
+summary(psmatchate.mod)
+
+# Match the outcome (completed) back to calculate point estimate of ATT
+# Create new df of just the subjects included in psmatchate.data
+
+gardasil_ate_df = merge(gardasil_df, psmatchate.data, by = "row.names", all = TRUE)
+```
+
+# Question 7
+```{r}
+
+```
