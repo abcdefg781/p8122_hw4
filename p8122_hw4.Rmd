@@ -44,7 +44,7 @@ describeBy(gardasil_subset, gardasil_subset$practice_type)
 The question of interest being addressed in this RCT is whether type of practice where Gardasil vaccine is taken affects rates of completion.
 
 ## i) Treatment and Control Arm
-In this study, the treatment arm would consist of those who go to an OB-GYN office to receive their gardasil shots, while the control arm would consist of those who go to a practice to receiver their gardasil shots. Those in the control arm include those under the age of 18 who go to their pediatrician for their gardasil vaccine, as well as adults who visit their general practitioner for the gardasil vaccine.
+In this study, the treatment arm would consist of those who go to an OB-GYN office to receive their gardasil shots, while the control arm would consist of those who go to a general practice or pediatrician to receive their gardasil shots.
 
 ## ii) Eligibility Criteria
 ```{r}
@@ -52,6 +52,20 @@ tableone::CreateTableOne(vars = c("age", "age_group", "race", "shots", "insuranc
 ```
 
 Looking at the descriptive statistics by location, locations 2 and 3 seem to be OB-GYN offices, since they only practice types that correspond to OB-GYN. Furthermore, location 4 does not have any subjects who visit a family practice. Therefore, only location 1 will be included since it is the only one with all three types of practices. This enforces the probabilistic assumption, since it ensures that all subjects have the chance of being a part of either the treatment arm or the control arm.
+
+```{r}
+# Check the distribution of age in OB-GYN to see if we need to exclude those under the age of 18
+ob_gyn = subset(gardasil_subset, practice_type == 2)
+hist(ob_gyn$age)
+
+pediatrician = subset(gardasil_subset, practice_type == 0)
+hist(pediatrician$age)
+
+gp = subset(gardasil_subset, practice_type == 1)
+hist(gp$age, breaks = 15)
+```
+
+Based on the distribution of age in all three locations, we will include all women in the study, since there are both adults and those under the age of 18 in all three practice types.
 
 # Question 3
 ```{r}
@@ -78,7 +92,10 @@ ps = predict(ps.model, type = "response")
 summary(ps.model)
 ```
 
-Interpretation
+The following interpretations for the parameter estimates can be made:
+
+* Intercept: The 
+* Age: 
 
 # Question 5
 ```{r}
